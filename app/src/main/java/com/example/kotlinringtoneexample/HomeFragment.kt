@@ -56,7 +56,7 @@ class HomeFragment : Fragment() {
         })
 
         val file = context!!.getExternalFilesDir("music") as File;
-        val path = file.absolutePath + File.separator + "aloha.mp3"
+        val path = file.absolutePath + File.separator + "trungkhanh.mp3"
 
         val title = "aloha"
 
@@ -122,13 +122,13 @@ class HomeFragment : Fragment() {
             values.put(MediaStore.MediaColumns.SIZE, file.length())
             values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
             values.put(MediaStore.Audio.Media.IS_ALARM, true)
-//            values.put(MediaStore.Audio.Media.IS_RINGTONE, true);
+            values.put(MediaStore.Audio.Media.IS_RINGTONE, false);
             values.put(MediaStore.Audio.Media.IS_NOTIFICATION, false);
             values.put(MediaStore.Audio.Media.IS_MUSIC, false);
 
 
             //Insert it into the database
-            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+//            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
             val newUri: Uri?
 //            if (uri != null) {
                 try {
@@ -142,10 +142,10 @@ class HomeFragment : Fragment() {
                         newUri
                     )
 
-//                    Settings.System.putString(
-//                        resolver, Settings.System.ALARM_ALERT,
-//                        newUri.toString()
-//                    )
+                    Settings.System.putString(
+                        resolver, Settings.System.ALARM_ALERT,
+                        newUri.toString()
+                    )
 
                     // báo thức mặc định
                     val defaultUri = RingtoneManager.getActualDefaultRingtoneUri(
@@ -185,7 +185,7 @@ class HomeFragment : Fragment() {
             values.put(MediaStore.Audio.Media.IS_NOTIFICATION, true)
 
             //Insert it into the database
-            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+//            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
             val newUri: Uri?
 //            if (uri != null) {
 //                newUri = resolver.insert(uri, values)
@@ -226,7 +226,7 @@ class HomeFragment : Fragment() {
             values.put(MediaStore.Audio.Media.IS_RINGTONE, true)
 
             //Insert it into the database
-            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+//            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
             val newUri: Uri?
 //            if (uri != null) {
                 //Insert it into the database
@@ -234,10 +234,16 @@ class HomeFragment : Fragment() {
 //                newUri = resolver.insert(uri, values)
                 try {
                     RingtoneManager.setActualDefaultRingtoneUri(
-                        context,
+                        activity!!.applicationContext,
                         RingtoneManager.TYPE_RINGTONE,
                         newUri
                     )
+
+                    Settings.System.putString(
+                        resolver, Settings.System.RINGTONE,
+                        newUri.toString()
+                    )
+
                 } catch (e: Exception) {
                     Log.d(TAG, "setRingTone: $e")
                 }

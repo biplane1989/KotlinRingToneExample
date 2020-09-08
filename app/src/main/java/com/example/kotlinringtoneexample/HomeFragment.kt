@@ -2,7 +2,9 @@ package com.example.kotlinringtoneexample
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.*
+import android.content.ContentResolver
+import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.Cursor
 import android.media.RingtoneManager
@@ -23,15 +25,21 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.fragment.app.Fragment
 import kotlinx.android.synthetic.main.fragment_home.*
-import java.io.*
+import java.io.File
+
+
+/*   val file = context!!.getExternalFilesDir("music") as File;
+   val path = file.absolutePath + File.separator + "lonely.mp3"*/
 
 class HomeFragment : Fragment() {
 
     var TAG = "001"
     val KEY = 1
     val CODE_WRITE_SETTINGS_PERMISSION = 2
-    lateinit var path: String
-    lateinit var result: String
+
+    val IS_ALARM = 1
+    val IS_NOTIFICATION = 2
+    val IS_RINGTONE = 3
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -45,258 +53,155 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        btn_save.setOnClickListener(View.OnClickListener {
-            result = saveas()
-            Log.d(TAG, "onViewCreated: result " + result)
-//            val file = context!!.getExternalFilesDir("music") as File;
-        })
+
+//        val file = File(Environment.getExternalStorageDirectory().toString() + "/Music/lonely.mp3")
+        val file = File(Environment.getExternalStorageDirectory().toString() + "/Download/lonely.mp3") // dùng cho máy ảo
+        val path = file.absolutePath
+
+        Log.d(TAG, "onViewCreated: path default : " + path)
+        if (file.exists()){
+            Log.d(TAG, "onViewCreated: exists : "+ file.absoluteFile)
+        }
 
         btn_per.setOnClickListener(View.OnClickListener {
             requestPermission()
         })
 
-        val file = context!!.getExternalFilesDir("music") as File;
-        val path = file.absolutePath + File.separator + "trungkhanh.mp3"
-
-        val title = "aloha"
-
-//        val path = "/data/data/com.example.kotlinringtoneexample/music/hello.mp3"
-//        val path = " /data/data/com.example.kotlinringtoneexample/app_hello.mp3/hello.mp3"
-
-        val f = File(path)
-        Log.d(TAG, "onViewCreated: " + path)
-        if (f.exists()) {
-            Log.d(TAG, "onViewCreated: %%% " + path)
-        }
-
         btn_ringtone.setOnClickListener(View.OnClickListener {
 
-//            /storage/emulated/0/Android/data/com.example.kotlinringtoneexample/files/music/hello.mp3
-//        val path = "/data/user/0/com.example.kotlinringtoneexample/app_hello/hello.mp3"
-//            val path = "/data/user/0/com.example.kotlinringtoneexample/app_lonely/lonely.mp3"
-//            val path = "/data/user/0/com.example.kotlinringtoneexample/app_aloha/aloha.mp3"
-//            val path = result
-//        val title = "hello"
-//            val title = "lonely"
-//            val title = "aloha"
-
-            setRingTone(path, title)
+            setRingTone(path)
         })
 
         btn_notification.setOnClickListener(View.OnClickListener {
-            setNotificationSound(path, title)
+            setNotificationSound(path)
 
         })
 
         btn_alarm.setOnClickListener(View.OnClickListener {
-            setAlarmManager(path, title)
+            setAlarmManager(path)
 
         })
 
         btn_ringtone_contact.setOnClickListener(View.OnClickListener {
-            setRingTonecontact(path, title)
-
+            setRingToneWithContact(path)
         })
     }
 
-    fun setAlarmManager(path: String, title: String) {
 
+    fun getUriFromFile(filePath: String): Uri? {
+        val folder = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.DATA
+        )
+        val cursor: Cursor? = context!!.getContentResolver()
+            .query(folder, projection, MediaStore.Audio.Media.DATA + "=?", arrayOf(filePath), null)
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    return Uri.parse(
+                        folder.toString() + File.separator + cursor.getString(
+                            cursor.getColumnIndex(
+                                MediaStore.Audio.Media._ID
+                            )
+                        )
+                    )
+                }
+            } finally {
+                cursor.close()
+            }
+        }
+        return null
+    }
+
+    fun getOrNew(filePath: String, typeRing: Int): Uri? {
         val resolver: ContentResolver = context!!.getContentResolver()
-//        val file = File(Environment.getExternalStorageDirectory().toString() + "/aloha.mp3")
-
-        val file = File(path)
-
+        val file = File(filePath)
         if (file.exists()) {
+            var oldUri = getUriFromFile(filePath)
+            if (oldUri != null) {
+                return oldUri
+            } else {
+                val values = ContentValues()
+                values.put(MediaStore.Audio.AudioColumns.DATA, file.absolutePath)
+                values.put(MediaStore.Audio.AudioColumns.TITLE, file.name)
+                values.put(MediaStore.Audio.AudioColumns.SIZE, file.length())
+                values.put(MediaStore.Audio.AudioColumns.MIME_TYPE, "audio/mp3")
+                values.put(MediaStore.Audio.AudioColumns.IS_ALARM, true)
+                when (typeRing) {
+                    IS_ALARM -> values.put(MediaStore.Audio.AudioColumns.IS_ALARM, true)
+                    IS_NOTIFICATION -> values.put(
+                        MediaStore.Audio.AudioColumns.IS_NOTIFICATION,
+                        true
+                    )
+                    IS_RINGTONE -> values.put(MediaStore.Audio.AudioColumns.IS_RINGTONE, true)
+                }
 
-            val oldUri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            resolver.delete(
-                oldUri!!,
-                MediaStore.MediaColumns.DATA + "=\"" + file.absolutePath + "\"",
-                null
-            )
+                val audioCollection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                return resolver.insert(audioCollection, values)
 
-            Log.d(TAG, "path " + file.absolutePath)
-            val values = ContentValues()
-            values.put(MediaStore.MediaColumns.DATA, file.absolutePath)
-            values.put(MediaStore.MediaColumns.TITLE, file.name)
-            values.put(MediaStore.MediaColumns.SIZE, file.length())
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
-            values.put(MediaStore.Audio.Media.IS_ALARM, true)
-            values.put(MediaStore.Audio.Media.IS_RINGTONE, false);
-            values.put(MediaStore.Audio.Media.IS_NOTIFICATION, false);
-            values.put(MediaStore.Audio.Media.IS_MUSIC, false);
+            }
 
-
-            //Insert it into the database
 //            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            val newUri: Uri?
 //            if (uri != null) {
-                try {
-                    newUri = resolver.insert(MediaStore.Images.Media.INTERNAL_CONTENT_URI, values);
 //                    newUri = resolver.insert(uri, values);
-                    Log.d(TAG, "new uri: " + newUri)
-
-                    RingtoneManager.setActualDefaultRingtoneUri(
-                        activity!!.applicationContext,
-                        RingtoneManager.TYPE_ALARM,
-                        newUri
-                    )
-
-                    Settings.System.putString(
-                        resolver, Settings.System.ALARM_ALERT,
-                        newUri.toString()
-                    )
-
-                    // báo thức mặc định
-                    val defaultUri = RingtoneManager.getActualDefaultRingtoneUri(
-                        requireContext(),
-                        RingtoneManager.TYPE_ALARM
-                    )
-                    Log.d(TAG, "default uri  : " + defaultUri + " path:   " + defaultUri.path + "  " + defaultUri.isAbsolute + " ")
-
-
-                } catch (e: Exception) {
-                    Log.d(TAG, "setRingTone: $e")
-                }
-//            }
         }
+        return null
     }
 
-
-    fun setNotificationSound(path: String, title: String) {
-        val resolver: ContentResolver = context!!.getContentResolver()
-        val file = File(path)
-
-        if (file.exists()) {
-            val oldUri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            resolver.delete(
-                oldUri!!,
-                MediaStore.MediaColumns.DATA + "=\"" + file.absolutePath + "\"",
-                null
+    fun setAlarmManager(filePath: String) {
+        val uri = getOrNew(filePath, IS_ALARM)
+        if (uri != null) {
+            RingtoneManager.setActualDefaultRingtoneUri(
+                activity!!.applicationContext,
+                RingtoneManager.TYPE_ALARM,
+                uri
             )
-
-            Log.d(TAG, "setRingTone: path " + file.absolutePath)
-            val values = ContentValues()
-            values.put(MediaStore.MediaColumns.DATA, file.absolutePath)
-            values.put(MediaStore.MediaColumns.TITLE, file.name)
-            values.put(MediaStore.MediaColumns.SIZE, 215454)
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
-            values.put(MediaStore.Audio.Media.ARTIST, "2ne1")
-            values.put(MediaStore.Audio.Media.IS_NOTIFICATION, true)
-
-            //Insert it into the database
-//            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            val newUri: Uri?
-//            if (uri != null) {
-//                newUri = resolver.insert(uri, values)
-                newUri = resolver.insert(MediaStore.Images.Media.INTERNAL_CONTENT_URI, values);
-                try {
-                    RingtoneManager.setActualDefaultRingtoneUri(
-                        context,
-                        RingtoneManager.TYPE_NOTIFICATION,
-                        newUri
-                    )
-                } catch (e: Exception) {
-                    Log.d(TAG, "setRingTone: $e")
-                }
-//            }
+        } else {
+            Toast.makeText(context, "Fail", Toast.LENGTH_SHORT).show()
         }
+
     }
 
-    fun setRingTone(path: String, title: String) {
-
-        val resolver: ContentResolver = context!!.getContentResolver()
-
-        val file = File(path)
-        if (file.exists()) {
-            val oldUri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            resolver.delete(
-                oldUri!!,
-                MediaStore.MediaColumns.DATA + "=\"" + file.absolutePath + "\"",
-                null
+    fun setNotificationSound(filePath: String) {
+        val uri = getOrNew(filePath, IS_NOTIFICATION)
+        if (uri != null) {
+            RingtoneManager.setActualDefaultRingtoneUri(
+                activity!!.applicationContext,
+                RingtoneManager.TYPE_NOTIFICATION,
+                uri
             )
-            Log.d(TAG, "setRingTone: path " + file.absolutePath)
-            val values = ContentValues()
-            values.put(MediaStore.MediaColumns.DATA, file.absolutePath)
-            values.put(MediaStore.MediaColumns.TITLE, file.name)
-            values.put(MediaStore.MediaColumns.SIZE, file.length())
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
-            values.put(MediaStore.Audio.Media.ARTIST, "2ne1")
-//            values.put(MediaStore.Audio.Media.DURATION, 230)
-            values.put(MediaStore.Audio.Media.IS_RINGTONE, true)
-
-            //Insert it into the database
-//            val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            val newUri: Uri?
-//            if (uri != null) {
-                //Insert it into the database
-                newUri = resolver.insert(MediaStore.Images.Media.INTERNAL_CONTENT_URI, values);
-//                newUri = resolver.insert(uri, values)
-                try {
-                    RingtoneManager.setActualDefaultRingtoneUri(
-                        activity!!.applicationContext,
-                        RingtoneManager.TYPE_RINGTONE,
-                        newUri
-                    )
-
-                    Settings.System.putString(
-                        resolver, Settings.System.RINGTONE,
-                        newUri.toString()
-                    )
-
-                } catch (e: Exception) {
-                    Log.d(TAG, "setRingTone: $e")
-                }
-//            }
+        } else {
+            Toast.makeText(context, "Fail", Toast.LENGTH_SHORT).show()
         }
 
     }
 
-//    fun setAsRingtone(path: String, title : String) {
-//
-//        val resolver: ContentResolver = context!!.getContentResolver()
-//
-//        val file = File(path)
-//
-//        val values = ContentValues()
-//        values.put(MediaStore.MediaColumns.TITLE, file.name)
-//        values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
-//        values.put(MediaStore.MediaColumns.SIZE, file.length())
-//        values.put(MediaStore.Audio.Media.ARTIST, R.string.app_name)
-//        values.put(MediaStore.Audio.Media.IS_RINGTONE, true)
-//        values.put(MediaStore.Audio.Media.IS_NOTIFICATION, true)
-//        values.put(MediaStore.Audio.Media.IS_ALARM, true)
-//        values.put(MediaStore.Audio.Media.IS_MUSIC, false)
-//        val newUri: Uri =
-//            resolver.insert(MediaStore.Audio.Media.INTERNAL_CONTENT_URI, values)!!
-//        try {
-//            resolver.openOutputStream(newUri).use { os -> }
-//        } catch (ignored: java.lang.Exception) {
-//        }
-//        RingtoneUtils.setRingtone(context!!, newUri, RingtoneManager.TYPE_RINGTONE)
-//    }
+    fun setRingTone(filePath: String) {
+        val uri = getOrNew(filePath, IS_RINGTONE)
+        if (uri != null) {
+            RingtoneManager.setActualDefaultRingtoneUri(
+                activity!!.applicationContext,
+                RingtoneManager.TYPE_RINGTONE,
+                uri
+            )
+        } else {
+            Toast.makeText(context, "Fail", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-
-    fun setRingTonecontact(path: String, title: String) {
+    fun setRingToneWithContact(filePath: String) {
         val values = ContentValues()
         val resolver: ContentResolver = context!!.getContentResolver()
+        val uri = getOrNew(filePath, IS_RINGTONE)
+        if (uri != null) {
 
-        val file = File(path)
-
-        if (file.exists()) {
-            val oldUri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-            resolver.delete(
-                oldUri!!,
-                MediaStore.MediaColumns.DATA + "=\"" + file.absolutePath + "\"",
-                null
-            )
             val contact_number = "0942132785"
             val lookupUri = Uri.withAppendedPath(
                 ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
                 contact_number
             )
-
-            // The columns used for `Contacts.getLookupUri`
             val projection =
                 arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY)
             val data: Cursor = context!!.getContentResolver()
@@ -307,84 +212,153 @@ class HomeFragment : Fragment() {
                 val contactId = data.getLong(0)
                 val lookupKey = data.getString(1)
                 val contactUri = ContactsContract.Contacts.getLookupUri(contactId, lookupKey)
-                values.put(MediaStore.MediaColumns.DATA, file.absolutePath)
-                values.put(MediaStore.MediaColumns.TITLE, title)
-                values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
-                values.put(MediaStore.Audio.Media.IS_RINGTONE, true)
-                val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
-                val newUri = resolver.insert(uri!!, values)
-                if (newUri != null) {
-                    val uriString = newUri.toString()
-                    values.put(ContactsContract.Contacts.CUSTOM_RINGTONE, uriString)
-                    Log.e("Uri String for " + ContactsContract.Contacts.CONTENT_URI, uriString)
-                    val updated = resolver.update(contactUri, values, null, null).toLong()
-                    Toast.makeText(context, "Updated : $updated", Toast.LENGTH_LONG).show()
-                }
+
+                val uriString = uri.toString()
+                values.put(ContactsContract.Contacts.CUSTOM_RINGTONE, uriString)
+
+                Log.e("Uri String for " + ContactsContract.Contacts.CONTENT_URI, uriString)
+                resolver.update(contactUri, values, null, null).toLong()
+
+
                 data.close()
             }
         } else {
-            Toast.makeText(context, "File does not exist", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Fail", Toast.LENGTH_SHORT).show()
         }
     }
 
 
-    fun saveas(): String {
-        val cw = ContextWrapper(context)
-//        val ressound: Int = R.raw.hello
-        val ressound: Int = R.raw.lonely
-//        val ressound: Int = R.raw.aloha
-        var buffer: ByteArray? = null
-        val fIn: InputStream = context!!.getResources().openRawResource(ressound)
-        var size = 0
+//    fun setRingTonecontact(path: String) {
+//        val values = ContentValues()
+//        val resolver: ContentResolver = context!!.getContentResolver()
+//
+//        val file = File(path)
+//
+//        if (file.exists()) {
+////            val oldUri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+////            resolver.delete(
+////                oldUri!!,
+////                MediaStore.MediaColumns.DATA + "=\"" + file.absolutePath + "\"",
+////                null
+////            )
+//            val contact_number = "0942132785"
+//            val lookupUri = Uri.withAppendedPath(
+//                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+//                contact_number
+//            )
+//            // The columns used for `Contacts.getLookupUri`
+//            val projection =
+//                arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY)
+//            val data: Cursor = context!!.getContentResolver()
+//                .query(lookupUri, projection, null, null, null)!!
+//            if (data != null && data.moveToFirst()) {
+//                data.moveToFirst()
+//                // Get the contact lookup Uri
+//                val contactId = data.getLong(0)
+//                val lookupKey = data.getString(1)
+//                val contactUri = ContactsContract.Contacts.getLookupUri(contactId, lookupKey)
+//
+//                values.put(MediaStore.MediaColumns.DATA, file.absolutePath)
+//                values.put(MediaStore.MediaColumns.TITLE, file.name)
+//                values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3")
+//                values.put(MediaStore.Audio.Media.IS_RINGTONE, true)
+//
+//                val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+//                val newUri = resolver.insert(uri!!, values)
+//                if (newUri != null) {
+//                    val uriString = newUri.toString()
+//                    values.put(ContactsContract.Contacts.CUSTOM_RINGTONE, uriString)
+//                    Log.e("Uri String for " + ContactsContract.Contacts.CONTENT_URI, uriString)
+//                    val updated = resolver.update(contactUri, values, null, null).toLong()
+//                    Toast.makeText(context, "Updated : $updated", Toast.LENGTH_LONG).show()
+//                }
+//
+////                val oldUri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+////                if (checkExits(oldUri.toString())) {
+////                    val uriString = oldUri.toString()
+////                    values.put(ContactsContract.Contacts.CUSTOM_RINGTONE, uriString)
+////                    Log.e("Uri String for " + ContactsContract.Contacts.CONTENT_URI, uriString)
+////                    val updated = resolver.update(contactUri, values, null, null).toLong()
+////                    Toast.makeText(context, "Updated : $updated", Toast.LENGTH_LONG).show()
+////                } else {
+////
+////                }
+////                    val uri = MediaStore.Audio.Media.getContentUriForPath(file.absolutePath)
+////                    val newUri = resolver.insert(uri!!, values)
+////                    if (newUri != null) {
+////                        val uriString = newUri.toString()
+////                        values.put(ContactsContract.Contacts.CUSTOM_RINGTONE, uriString)
+////                        Log.e("Uri String for " + ContactsContract.Contacts.CONTENT_URI, uriString)
+////                        val updated = resolver.update(contactUri, values, null, null).toLong()
+////                        Toast.makeText(context, "Updated : $updated", Toast.LENGTH_LONG).show()
+////                    }
+////                }
+//                data.close()
+//            }
+//
+//
+//        } else {
+//            Toast.makeText(context, "File does not exist", Toast.LENGTH_LONG).show()
+//        }
+//    }
 
-        //1st part
-        try {
-            size = fIn.available()
-            buffer = ByteArray(size)
-            fIn.read(buffer)
-            fIn.close()
-        } catch (e: IOException) {
-            Log.e(TAG, "IOException first part")
-//            return false
-        }
-//        val soundname = "hello"
-        val soundname = "lonely"
-//        val soundname = "aloha"
-        val filename = "$soundname.mp3"
 
-//        val path =
-//            "/storage/emulated/0/Android/data/com.example.kotlinringtoneexample/files/music" + "/$filename"
-
-        val path: String =
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                .toString()
-
-        val directory = cw.getDir(soundname, Context.MODE_PRIVATE)
-        val fullPath = File(path)
-//        val fullPath = File(directory, filename)
-
-//        val exists = File(directory).exists()
-        if (fullPath.exists()) {
-            fullPath.mkdirs()
-        }
-
-        //second part
-        val save: FileOutputStream
-        try {
-            save = FileOutputStream(fullPath)
-            save.write(buffer)
-            save.flush()
-            save.close()
-        } catch (e: FileNotFoundException) {
-            Log.e(TAG, "FileNotFoundException in second part")
-//            return false
-        } catch (e: IOException) {
-            Log.e(TAG, "IOException in second part")
-//            return false
-        }
-        return fullPath.absolutePath
-    }
-
+//    fun saveas(): String {
+//        val cw = ContextWrapper(context)
+////        val ressound: Int = R.raw.hello
+//        val ressound: Int = R.raw.lonely
+////        val ressound: Int = R.raw.aloha
+//        var buffer: ByteArray? = null
+//        val fIn: InputStream = context!!.getResources().openRawResource(ressound)
+//        var size = 0
+//
+//        //1st part
+//        try {
+//            size = fIn.available()
+//            buffer = ByteArray(size)
+//            fIn.read(buffer)
+//            fIn.close()
+//        } catch (e: IOException) {
+//            Log.e(TAG, "IOException first part")
+////            return false
+//        }
+////        val soundname = "hello"
+//        val soundname = "lonely"
+////        val soundname = "aloha"
+//        val filename = "$soundname.mp3"
+//
+////        val path =
+////            "/storage/emulated/0/Android/data/com.example.kotlinringtoneexample/files/music" + "/$filename"
+//
+//        val path: String =
+//            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+//                .toString()
+//
+//        val directory = cw.getDir(soundname, Context.MODE_PRIVATE)
+//        val fullPath = File(path)
+////        val fullPath = File(directory, filename)
+//
+////        val exists = File(directory).exists()
+//        if (fullPath.exists()) {
+//            fullPath.mkdirs()
+//        }
+//
+//        //second part
+//        val save: FileOutputStream
+//        try {
+//            save = FileOutputStream(fullPath)
+//            save.write(buffer)
+//            save.flush()
+//            save.close()
+//        } catch (e: FileNotFoundException) {
+//            Log.e(TAG, "FileNotFoundException in second part")
+////            return false
+//        } catch (e: IOException) {
+//            Log.e(TAG, "IOException in second part")
+////            return false
+//        }
+//        return fullPath.absolutePath
+//    }
 
     @SuppressLint("WrongConstant")
     private fun requestPermission() {
